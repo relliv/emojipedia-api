@@ -10,11 +10,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Unicode_Emojis {
-  id             Int    @id @default(autoincrement())
-  emoji          String
-  name           String
-  description    String
-  hex_code_point String
-  short_code     String
+model Unicode_Emoji {
+  id                      Int                       @id @default(autoincrement())
+  emoji                   String
+  name                    String
+  known_as                String
+  description             String
+  codepoint               String
+  shortCode               String
+  version                 String
+  proposal                String
+  isSupportingByChromium  Boolean                   @default(false)
+  testedChromiumVersion   String
+  emojipedia_page         String
+  Unicode_Emojis_Keywords Unicode_Emojis_Keywords[]
+}
+
+model Unicode_Emoji_Keyword {
+  id                      Int                       @id @default(autoincrement())
+  name                    String
+  Unicode_Emojis_Keywords Unicode_Emojis_Keywords[]
+}
+
+model Unicode_Emojis_Keywords {
+  emoji     Unicode_Emoji         @relation(fields: [emojiId], references: [id])
+  emojiId   Int
+  keyword   Unicode_Emoji_Keyword @relation(fields: [keywordId], references: [id])
+  keywordId Int
+
+  @@id([emojiId, keywordId])
 }
