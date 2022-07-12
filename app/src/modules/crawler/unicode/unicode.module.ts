@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common';
 import { UnicodeController } from './unicode.controller';
 import { UnicodeService } from './unicode.service';
 import { VersionService } from './version/version.service';
+import { CrawlerService } from './crawler/crawler.service';
 
 @Module({
   imports: [
@@ -15,6 +16,6 @@ import { VersionService } from './version/version.service';
     }),
   ],
   controllers: [UnicodeController],
-  providers: [UnicodeService, PrismaService, VersionService],
+  providers: [UnicodeService, PrismaService, VersionService, CrawlerService],
 })
 export class UnicodeModule {}

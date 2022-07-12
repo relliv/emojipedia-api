@@ -1,4 +1,3 @@
-import { version } from 'os';
 /* eslint-disable no-var */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { HttpService } from '@nestjs/axios';
@@ -11,6 +10,7 @@ import { UnicodeService } from './unicode.service';
 import { VersionService } from './version/version.service';
 import { Prisma, Unicode_Emoji, Unicode_Emoji_Version } from '@prisma/client';
 import { Cache } from 'cache-manager';
+import { CrawlerService } from './crawler/crawler.service';
 
 @Controller('unicode')
 export class UnicodeController {
@@ -20,90 +20,45 @@ export class UnicodeController {
     private readonly httpService: HttpService,
     private readonly unicodeService: UnicodeService,
     private readonly versionService: VersionService,
+    private readonly crawlerService: CrawlerService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
+  /**
+   * Get live unicode emoji version list from emojipedia.org
+   *
+   * @returns Promise<Observable<any>>
+   */
   @Get('versions')
   public async getVersions(): Promise<Observable<any>> {
-    return new Promise(async (resolve) => {
-      const cacheKey = 'has:unicode:emoji:versions',
-        cachedData = await this.cacheManager.get(cacheKey);
-
-      if (cachedData) {
-        const responseData = this.getEmojiVersionListHtml();
-
-        return resolve(of(responseData));
-      }
-
-      return await this.httpService
-        .get('https://emojipedia.org/')
+    return await new Promise(async (resolve) => {
+      return (await this.crawlerService.crawlVersions())
         .pipe(
-          map(async (res) => {
-            const parsedHtml = parse(res.data);
-
-            const unicodeVersionItems = parsedHtml.querySelectorAll(
-              'div.unicode-version>ul:nth-child(4) li>a',
+          map(async (results) => {
+            const versionCreateJob = results.map(
+              async (item: Prisma.Unicode_Emoji_VersionCreateInput) => {
+                await this.versionService.create(item);
+              },
             );
 
-            if (unicodeVersionItems && unicodeVersionItems) {
-              const results = unicodeVersionItems
-                .map((element: HTMLElement) => {
-                  if (element.attributes && element.attributes.href) {
-                    if (element.attributes.href.startsWith('/unicode-')) {
-                      const versionData = element.innerText.split('Unicode ');
-
-                      const item = <Prisma.Unicode_Emoji_VersionCreateInput>{
-                        tag: versionData[1] || 0,
-                      };
-
-                      return item;
-                    }
-                  }
-                })
-                .filter((x) => x.tag);
-
-              const array = results.map(
-                async (item: Prisma.Unicode_Emoji_VersionCreateInput) => {
-                  await this.versionService.create(item);
-                },
-              );
-
-              return zip(array).subscribe({
-                complete: async () => {
-                  await this.cacheManager.set(
-                    cacheKey,
-                    {
-                      isDataCrawled: true,
+            return zip(versionCreateJob).subscribe({
+              complete: async () => {
+                const versions: Unicode_Emoji_Version[] = (
+                  await this.versionService.listAll({
+                    orderBy: {
+                      tag: 'asc',
                     },
-                    {
-                      ttl: 1000 * 60 * 300,
-                    },
-                  );
+                  })
+                ).sort((a, b) => parseFloat(a.tag) - parseFloat(b.tag));
 
-                  resolve(
-                    of(
-                      '<meta http-equiv="refresh" content="0; url=/crawler/unicode/versions">',
-                    ),
-                  );
-                },
-              });
-            }
-          }),
-          catchError((error: any) => {
-            resolve(
-              of(
-                this.getEmojiVersionListHtml() +
-                  `<hr> Error: <span>${error.message}</span>`,
-              ),
-            );
-
-            return (
-              this.getEmojiVersionListHtml() +
-              `<hr> Error: <span>${error.message}</span>`
-            );
+                resolve(of(this.getEmojiVersionListHtml(versions)));
+              },
+            });
           }),
         )
-        .toPromise();
+        .subscribe(() => {
+          ray('subscribe');
+        });
     });
   }
 
@@ -211,8 +166,6 @@ export class UnicodeController {
                 },
               });
             }
-
-            ray(unicodeEmojiList);
           }),
           catchError((error) =>
             of({ message: error.message, status: error.status }),
@@ -329,19 +282,18 @@ export class UnicodeController {
     }, item.emoji);
   }
 
-  private async getEmojiVersionListHtml() {
-    let versions: Unicode_Emoji_Version[] = await this.versionService.listAll({
-      orderBy: {
-        tag: 'asc',
-      },
-    });
-
-    versions = versions.sort((a, b) => parseFloat(a.tag) - parseFloat(b.tag));
+  /**
+   * Spaghetti UI for crawling unicode emoji
+   *
+   * @param versions list of version
+   * @returns string
+   */
+  private async getEmojiVersionListHtml(versions: any) {
     const versionsList = versions
       .filter(
         (x: any) =>
           x._count.Unicode_Emoji === 0 &&
-          (x.tag != '3.1' || x.tag != '5.0' || x.tag != '16.0'),
+          (x.tag != '3.1' || x.tag != '5.0' || x.tag != '16.0'), // exclude empty versions
       )
       .map((item) => {
         return `await fetch('http://localhost:3000/crawler/unicode/version/${item.tag}');
@@ -350,7 +302,7 @@ export class UnicodeController {
       .join('');
 
     return (
-      `<h3>Unicode Emoji Versions (${versions.length})</h3>  <ul>` +
+      `<h3>Crawled Unicode Emoji Versions (${versions.length})</h3>  <ul>` +
       versions
         .map(
           (version: any) =>
