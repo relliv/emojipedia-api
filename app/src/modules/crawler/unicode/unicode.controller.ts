@@ -176,7 +176,7 @@ export class UnicodeController {
         .map(
           (item: any) =>
             `<a href="../emoji/${
-              item.emojipedia_page
+              item.emojipediaPage
             }" style="margin: 10px; border: 1px solid gray; padding: 10px;" ${
               item.isSupportingByChromium
                 ? ''
@@ -205,7 +205,7 @@ export class UnicodeController {
         .map(
           (item: any) =>
             `<a href="../emoji/${
-              item.emojipedia_page
+              item.emojipediaPage
             }" style="margin: 10px; border: 1px solid gray; padding: 10px;" ${
               item.isSupportingByChromium
                 ? ''
