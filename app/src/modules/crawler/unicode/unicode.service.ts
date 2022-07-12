@@ -40,11 +40,7 @@ export class UnicodeService {
       where,
       orderBy,
       include: {
-        Unicode_Emoji_Version: {
-          select: {
-            _count: true,
-          },
-        },
+        Unicode_Emoji_Version: true,
       },
     });
   }

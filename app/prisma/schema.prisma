@@ -29,6 +29,6 @@ model Unicode_Emoji {
   proposal               String?
   isSupportingByChromium Boolean?               @default(false)
   testedChromiumVersion  String?
-  emojipedia_page        String?
+  emojipediaPage         String?
   keywords               String?
 }
