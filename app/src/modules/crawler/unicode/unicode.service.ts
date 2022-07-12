@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { Unicode_Emoji, Prisma } from '@prisma/client';
+import { Unicode_Emoji, Prisma, Unicode_Emoji_Version } from '@prisma/client';
 import { PrismaService } from 'src/shared/services/prisma/prisma.service';
 
 @Injectable()
 export class UnicodeService {
   constructor(private prisma: PrismaService) {}
 
-  async unicodeEmoji(
+  async get(
     userWhereUniqueInput: Prisma.Unicode_EmojiWhereUniqueInput,
   ): Promise<Unicode_Emoji | null> {
     return this.prisma.unicode_Emoji.findUnique({
@@ -14,7 +14,7 @@ export class UnicodeService {
     });
   }
 
-  async unicodeEmojis(params: {
+  async list(params: {
     skip?: number;
     take?: number;
     cursor?: Prisma.Unicode_EmojiWhereUniqueInput;
@@ -31,15 +31,41 @@ export class UnicodeService {
     });
   }
 
-  async createUnicodeEmoji(
-    data: Prisma.Unicode_EmojiCreateInput,
-  ): Promise<Unicode_Emoji> {
+  async listAll(params: {
+    where?: Prisma.Unicode_EmojiWhereInput;
+    orderBy?: Prisma.Unicode_EmojiOrderByWithRelationInput;
+  }): Promise<Unicode_Emoji[]> {
+    const { where, orderBy } = params;
+    return this.prisma.unicode_Emoji.findMany({
+      where,
+      orderBy,
+      include: {
+        Unicode_Emoji_Version: {
+          select: {
+            _count: true,
+          },
+        },
+      },
+    });
+  }
+
+  async create(data: Prisma.Unicode_EmojiCreateInput): Promise<Unicode_Emoji> {
+    const hasRecord = await this.prisma.unicode_Emoji.findFirst({
+      where: {
+        emoji: data.emoji,
+      },
+    });
+
+    if (hasRecord) {
+      return hasRecord;
+    }
+
     return this.prisma.unicode_Emoji.create({
       data,
     });
   }
 
-  async updateUnicodeEmoji(params: {
+  async update(params: {
     where: Prisma.Unicode_EmojiWhereUniqueInput;
     data: Prisma.Unicode_EmojiUpdateInput;
   }): Promise<Unicode_Emoji> {
@@ -50,7 +76,7 @@ export class UnicodeService {
     });
   }
 
-  async deleteUnicodeEmoji(
+  async delete(
     where: Prisma.Unicode_EmojiWhereUniqueInput,
   ): Promise<Unicode_Emoji> {
     return this.prisma.unicode_Emoji.delete({

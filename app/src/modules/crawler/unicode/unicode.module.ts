@@ -1,7 +1,9 @@
+import { PrismaService } from 'src/shared/services/prisma/prisma.service';
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 import { UnicodeController } from './unicode.controller';
 import { UnicodeService } from './unicode.service';
+import { VersionService } from './version/version.service';
 
 @Module({
   imports: [
@@ -13,6 +15,6 @@ import { UnicodeService } from './unicode.service';
     }),
   ],
   controllers: [UnicodeController],
-  providers: [UnicodeService],
+  providers: [UnicodeService, PrismaService, VersionService],
 })
 export class UnicodeModule {}
