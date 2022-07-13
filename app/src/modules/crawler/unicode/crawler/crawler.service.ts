@@ -178,6 +178,8 @@ export class CrawlerService {
                     let item: any = null;
 
                     if (Boolean(emoji)) {
+                      // source: https://stackoverflow.com/a/64007175/6940144
+                      // note: https://stackoverflow.com/a/64396666/6940144
                       const regex = /\p{Extended_Pictographic}/gu,
                         isEmojiValid = regex.test(emoji);
 
