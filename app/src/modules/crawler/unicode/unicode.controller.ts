@@ -117,16 +117,18 @@ export class UnicodeController {
     @Param('version') versionTag: string,
   ): Promise<Observable<any>> {
     const unicodeVersion: Unicode_Version =
-      await this.unicodeVersionService.findOne({
+      type === 'unicode' &&
+      (await this.unicodeVersionService.findOne({
         tag: versionTag,
-      });
+      }));
 
     const emojiVersion: Unicode_Emoji_Version =
-      await this.emojiVersionService.findOne({
+      type === 'emoji' &&
+      (await this.emojiVersionService.findOne({
         tag: versionTag,
-      });
+      }));
 
-    const version = emojiVersion || unicodeVersion;
+    const version = (type === 'emoji' && emojiVersion) || unicodeVersion;
 
     return await new Promise(async (resolve) => {
       if (!version) {
@@ -140,13 +142,13 @@ export class UnicodeController {
               async (item: Prisma.Unicode_EmojiCreateInput) => {
                 try {
                   const hasEmoji = await this.unicodeService.findOne({
-                    emoji: item.emoji,
+                    slug: item.slug,
                   });
 
                   if (hasEmoji) {
                     if (
+                      type === 'unicode' &&
                       !hasEmoji.unicode_VersionId &&
-                      unicodeVersion &&
                       hasEmoji.unicode_VersionId !== unicodeVersion.id
                     ) {
                       hasEmoji.unicode_VersionId =
@@ -154,6 +156,7 @@ export class UnicodeController {
                     }
 
                     if (
+                      type === 'emoji' &&
                       !hasEmoji.unicode_Emoji_VersionId &&
                       emojiVersion &&
                       hasEmoji.unicode_Emoji_VersionId !== emojiVersion.id
@@ -190,16 +193,16 @@ export class UnicodeController {
               complete: async () => {
                 let emojis: Unicode_Emoji[];
 
-                if (unicodeVersion) {
+                if (type === 'unicode') {
                   emojis = await this.unicodeService.listAll({
                     where: {
-                      unicode_VersionId: unicodeVersion.id,
+                      unicode_VersionId: version.id,
                     },
                   });
                 } else if (emojiVersion) {
                   emojis = await this.unicodeService.listAll({
                     where: {
-                      unicode_Emoji_VersionId: emojiVersion.id,
+                      unicode_Emoji_VersionId: version.id,
                     },
                   });
                 }
@@ -280,14 +283,10 @@ export class UnicodeController {
     type: string,
   ): Promise<string> {
     const versionsList = versions
-      .filter(
-        (x: any) =>
-          x._count.Unicode_Emoji === 0 &&
-          (x.tag != '3.1' || x.tag != '5.0' || x.tag != '16.0'), // exclude empty versions
-      )
+      .filter((x) => x._count.Unicode_Emoji === 0)
       .map((item) => {
         return `await fetch('http://localhost:3000/crawler/unicode/version/${type}/${item.tag}');
-        await new Promise(resolve => setTimeout(resolve, 3000));`;
+        await new Promise(resolve => setTimeout(resolve, 2500));`;
       })
       .join('');
 
@@ -297,7 +296,7 @@ export class UnicodeController {
         .map(
           (version: any) =>
             `<li style="padding: 5px;">
-              <a href="version/${version.tag}">
+              <a href="version/${type}/${version.tag}">
                 v${version.tag} (${version._count.Unicode_Emoji})
               </a>
 
@@ -311,7 +310,6 @@ export class UnicodeController {
         .join('') +
       '</ul>' +
       (await this.getEmojiListofAllHtml(type)) +
-      'Refresh to fetch new emojis' +
       `<script>
         setTimeout(() => {
           (async () => {
@@ -328,7 +326,7 @@ export class UnicodeController {
     type: string,
   ) {
     return (
-      '<a href="../versions">Return Back</a>' +
+      '<a href="/crawler/unicode/versions">Return Back</a>' +
       `<h3>${type} Emojis for v${version.tag} (${emojis.length})</h3>  <div style="font-size: 40px; display: flex; flex-wrap: wrap;">` +
       emojis
         .map(
@@ -376,9 +374,33 @@ export class UnicodeController {
             },
           });
 
+    const unsupportedEmojis =
+      type === 'emoji'
+        ? await this.unicodeService.listAll({
+            where: {
+              isSupportingByChromium: false,
+              NOT: [
+                {
+                  unicode_Emoji_VersionId: null,
+                },
+              ],
+            },
+          })
+        : await this.unicodeService.listAll({
+            where: {
+              isSupportingByChromium: false,
+              NOT: [
+                {
+                  unicode_VersionId: null,
+                },
+              ],
+            },
+          });
+
     return (
-      '<a href="../versions">Return Back</a>' +
-      `<h3>Supported Unicode Emojis (${emojis.length})</h3>  <div style="font-size: 40px; display: flex; flex-wrap: wrap;">` +
+      '<a href="/crawler/unicode/versions">Return Back</a>' +
+      `<h3>Supported Unicode Emojis (supported: ${emojis.length} / unsupported: ${unsupportedEmojis.length})</h3>  
+      <div style="font-size: 40px; display: flex; flex-wrap: wrap; height: 600px; overflow: auto;">` +
       emojis
         .map(
           (item: any) =>

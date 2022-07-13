@@ -45,7 +45,6 @@ export class CrawlerService {
                     if (element.attributes.href.startsWith('/emoji-')) {
                       const versionData = element.innerText.split('Emoji ');
 
-                      ray(versionData);
                       const item = <Prisma.Unicode_Emoji_VersionCreateInput>{
                         tag: versionData[1] || 0,
                       };
@@ -142,7 +141,7 @@ export class CrawlerService {
     version: Unicode_Emoji_Version,
   ): Promise<Observable<any>> {
     return new Promise(async (resolve) => {
-      const cacheKey = `unicode:emoji:list:v-${version.tag}`,
+      const cacheKey = `unicode:emoji:type-${type}:v-${version.tag}`,
         cachedData = await this.cacheContainer.getItem(cacheKey);
 
       if (cachedData) {
@@ -178,18 +177,23 @@ export class CrawlerService {
 
                     let item: any = null;
 
-                    if (emoji) {
-                      item = {
-                        emoji: emoji,
-                        testedChromiumVersion: chromiumVersion,
-                        slug: element.attributes.href.replace(/\//g, ''),
-                      };
+                    if (Boolean(emoji)) {
+                      const regex = /\p{Extended_Pictographic}/gu,
+                        isEmojiValid = regex.test(emoji);
+
+                      if (isEmojiValid) {
+                        item = {
+                          emoji: emoji,
+                          testedChromiumVersion: chromiumVersion,
+                          slug: element.attributes.href.replace(/\//g, ''),
+                        };
+                      }
                     }
 
                     return item;
                   }
                 })
-                .filter((x) => Boolean(x.emoji));
+                .filter((x) => x && Boolean(x.emoji));
 
               for (let i = 0; i < results.length; i++) {
                 results[i].isSupportingByChromium = await this.isEmojiSupported(
@@ -238,7 +242,6 @@ export class CrawlerService {
                 "ul li a[href^='/emoji/']:not([title])",
               );
 
-            ray(codepoints);
             if (codepoints && codepoints.length > 0) {
               const results = codepoints
                 .map((element: HTMLElement) => {
