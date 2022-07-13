@@ -16,7 +16,7 @@ import { CrawlerService } from './crawler/crawler.service';
 import { EmojiVersionService } from './version/emoji-version.service';
 import { ray } from 'node-ray';
 
-@Controller('unicode')
+@Controller('unicode-emoji')
 export class UnicodeController {
   private puppeeterPage: any;
 
@@ -285,7 +285,7 @@ export class UnicodeController {
     const versionsList = versions
       .filter((x) => x._count.Unicode_Emoji === 0)
       .map((item) => {
-        return `await fetch('http://localhost:3000/crawler/unicode/version/${type}/${item.tag}');
+        return `await fetch('http://localhost:3000/crawler/unicode-emoji/version/${type}/${item.tag}');
         await new Promise(resolve => setTimeout(resolve, 2500));`;
       })
       .join('');
@@ -326,12 +326,12 @@ export class UnicodeController {
     type: string,
   ) {
     return (
-      '<a href="/crawler/unicode/versions">Return Back</a>' +
+      '<a href="/crawler/unicode-emoji/versions">Return Back</a>' +
       `<h3>${type} Emojis for v${version.tag} (${emojis.length})</h3>  <div style="font-size: 40px; display: flex; flex-wrap: wrap;">` +
       emojis
         .map(
           (item: any) =>
-            `<a href="/crawler/unicode/emoji/${
+            `<a href="/crawler/unicode-emoji/emoji/${
               item.slug
             }" style="margin: 10px; border: 1px solid gray; padding: 10px;" ${
               item.isSupportingByChromium
@@ -398,13 +398,13 @@ export class UnicodeController {
           });
 
     return (
-      '<a href="/crawler/unicode/versions">Return Back</a>' +
+      '<a href="/crawler/unicode-emoji/versions">Return Back</a>' +
       `<h3>Supported Unicode Emojis (supported: ${emojis.length} / unsupported: ${unsupportedEmojis.length})</h3>  
       <div style="font-size: 40px; display: flex; flex-wrap: wrap; height: 600px; overflow: auto;">` +
       emojis
         .map(
           (item: any) =>
-            `<a href="/crawler/unicode/emoji/${
+            `<a href="/crawler/unicode-emoji/emoji/${
               item.slug
             }" style="margin: 10px; border: 1px solid gray; padding: 10px;" ${
               item.isSupportingByChromium
