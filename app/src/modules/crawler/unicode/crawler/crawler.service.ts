@@ -4,13 +4,15 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { HTMLElement, parse } from 'node-html-parser';
 import { catchError, map, Observable, of, zip } from 'rxjs';
-import { Prisma, Unicode_Emoji_Version } from '@prisma/client';
+import { Prisma, Unicode_Emoji, Unicode_Emoji_Version } from '@prisma/client';
 import puppeteer from 'puppeteer';
+import { ray } from 'node-ray';
 
 @Injectable()
 export class CrawlerService {
   private cacheContainer: CacheContainer;
   private puppeeterPage: any;
+  private cacheTtl = 60 * 60 * 100;
 
   constructor(private readonly httpService: HttpService) {
     this.cacheContainer = new CacheContainer(
@@ -36,7 +38,7 @@ export class CrawlerService {
                 'div.unicode-version>ul:nth-child(4) li>a',
               );
 
-            if (unicodeVersionItems && unicodeVersionItems) {
+            if (unicodeVersionItems && unicodeVersionItems.length > 0) {
               const results = unicodeVersionItems
                 .map((element: HTMLElement) => {
                   if (element.attributes && element.attributes.href) {
@@ -54,7 +56,7 @@ export class CrawlerService {
                 .filter((x) => x.tag);
 
               this.cacheContainer.setItem(cacheKey, results, {
-                ttl: 60 * 60 * 24,
+                ttl: this.cacheTtl,
               });
 
               resolve(of(results ? results : []));
@@ -79,6 +81,7 @@ export class CrawlerService {
       const cacheKey = `unicode:emoji:list:v-${version.tag}`,
         cachedData = await this.cacheContainer.getItem(cacheKey);
 
+      ray(cachedData, cacheKey);
       if (cachedData) {
         return resolve(of(cachedData));
       }
@@ -89,10 +92,12 @@ export class CrawlerService {
           map(async (res) => {
             const parsedHtml = parse(res.data),
               unicodeEmojiItems = parsedHtml.querySelectorAll(
-                'div.content>article>ul:nth-child(3) li>a',
+                'div.content>article>ul:nth-child(3) li>a, div.content>article>ul:nth-child(4) li>a',
               );
 
-            if (unicodeEmojiItems && unicodeEmojiItems) {
+            ray(res.data);
+
+            if (unicodeEmojiItems && unicodeEmojiItems.length > 0) {
               // fix protocol issue: https://github.com/puppeteer/puppeteer/issues/1175
               const browser = await puppeteer.launch({
                 args: ['--disable-dev-shm-usage', '--shm-size=3gb'],
@@ -116,10 +121,7 @@ export class CrawlerService {
                       item = {
                         emoji: emoji,
                         testedChromiumVersion: chromiumVersion,
-                        emojipediaPage: element.attributes.href.replace(
-                          /\//g,
-                          '',
-                        ),
+                        slug: element.attributes.href.replace(/\//g, ''),
                       };
                     }
 
@@ -135,11 +137,74 @@ export class CrawlerService {
               }
 
               this.cacheContainer.setItem(cacheKey, results, {
-                ttl: 60 * 60 * 24,
+                ttl: this.cacheTtl,
               });
 
               resolve(of(results ? results : []));
             }
+
+            resolve(of([]));
+          }),
+          catchError((error: any) => {
+            resolve(of([]));
+
+            console.log(error.message);
+
+            return of(error.message);
+          }),
+        )
+        .toPromise();
+    });
+  }
+
+  public async crawlEmojiDetails(
+    emoji: Unicode_Emoji,
+  ): Promise<Observable<any>> {
+    return new Promise(async (resolve) => {
+      const cacheKey = `unicode:emoji:details:${emoji.slug}`,
+        cachedData = await this.cacheContainer.getItem(cacheKey);
+
+      if (cachedData) {
+        return resolve(of(cachedData));
+      }
+
+      return await this.httpService
+        .get(`https://emojipedia.org/${emoji.slug}`)
+        .pipe(
+          map(async (res) => {
+            const parsedHtml = parse(res.data),
+              codepoints = parsedHtml.querySelectorAll(
+                "ul li a[href^='/emoji/']:not([title])",
+              );
+
+            ray(codepoints);
+            if (codepoints && codepoints.length > 0) {
+              const results = codepoints
+                .map((element: HTMLElement) => {
+                  if (element.attributes && element.attributes.href) {
+                    if (element.attributes.href.startsWith('/emoji/')) {
+                      const codepointData = element.innerText.split(' ');
+
+                      return <Prisma.Unicode_EmojiCreateInput>{
+                        codePoint: codepointData[1] || 0,
+                      };
+                    }
+                  }
+                })
+                .filter((x) => x && x.codePoint);
+
+              //   this.cacheContainer.setItem(cacheKey, results, {
+              //     ttl: this.cacheTtl,
+              //   });
+
+              const result = {
+                codepoints: results,
+              };
+
+              resolve(of(result ? result : {}));
+            }
+
+            resolve(of({}));
           }),
           catchError((error: any) => {
             resolve(of([]));

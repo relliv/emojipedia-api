@@ -6,7 +6,7 @@ import { PrismaService } from 'src/shared/services/prisma/prisma.service';
 export class UnicodeService {
   constructor(private prisma: PrismaService) {}
 
-  async get(
+  async findOne(
     userWhereUniqueInput: Prisma.Unicode_EmojiWhereUniqueInput,
   ): Promise<Unicode_Emoji | null> {
     return this.prisma.unicode_Emoji.findUnique({

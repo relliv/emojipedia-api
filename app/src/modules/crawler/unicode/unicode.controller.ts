@@ -78,6 +78,10 @@ export class UnicodeController {
     });
 
     return await new Promise(async (resolve) => {
+      if (!version) {
+        resolve(of(`<h3>Given version not found</h3>`));
+      }
+
       return (await this.crawlerService.crawlEmojiListByVersion(version))
         .pipe(
           map(async (results) => {
@@ -114,6 +118,58 @@ export class UnicodeController {
         )
         .subscribe(() => {
           console.log('emojis of target version fetch successful');
+        });
+    });
+  }
+
+  /**
+   * Get live unicode emoji details
+   *
+   * @returns Promise<Observable<any>>
+   */
+  @Get('emoji/:slug')
+  public async getEmojiDetails(
+    @Param('slug') slug: string,
+  ): Promise<Observable<any>> {
+    const emoji: Unicode_Emoji = await this.unicodeService.findOne({
+      slug: slug,
+    });
+
+    return await new Promise(async (resolve) => {
+      ray(emoji);
+      if (!slug) {
+        resolve(of(`<h3>Given emoji not found</h3>`));
+      }
+
+      return (await this.crawlerService.crawlEmojiDetails(emoji))
+        .pipe(
+          map(async (results) => {
+            resolve(of(results));
+
+            // const versionCreateJobs = results.map(
+            //   async (item: Prisma.Unicode_Emoji_VersionCreateInput) => {
+            //     await this.versionService.create(item);
+            //   },
+            // );
+
+            // return zip(versionCreateJobs).subscribe({
+            //   complete: async () => {
+            //     const versions: Unicode_Emoji_Version[] = (
+            //       await this.versionService.listAll({
+            //         orderBy: {
+            //           tag: 'asc',
+            //         },
+            //       })
+            //     ).sort((a, b) => parseFloat(a.tag) - parseFloat(b.tag));
+
+            //     resolve(of(this.getEmojiVersionListHtml(versions)));
+            //     resolve(of(versions));
+            //   },
+            // });
+          }),
+        )
+        .subscribe(() => {
+          console.log(`${emoji.emoji} details fetch successful`);
         });
     });
   }
@@ -175,8 +231,8 @@ export class UnicodeController {
       emojis
         .map(
           (item: any) =>
-            `<a href="../emoji/${
-              item.emojipediaPage
+            `<a href="/crawler/unicode/emoji/${
+              item.slug
             }" style="margin: 10px; border: 1px solid gray; padding: 10px;" ${
               item.isSupportingByChromium
                 ? ''
@@ -204,8 +260,8 @@ export class UnicodeController {
       emojis
         .map(
           (item: any) =>
-            `<a href="../emoji/${
-              item.emojipediaPage
+            `<a href="/crawler/unicode/emoji/${
+              item.slug
             }" style="margin: 10px; border: 1px solid gray; padding: 10px;" ${
               item.isSupportingByChromium
                 ? ''
