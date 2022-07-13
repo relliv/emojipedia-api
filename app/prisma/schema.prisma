@@ -18,17 +18,18 @@ model Unicode_Emoji_Version {
 
 model Unicode_Emoji {
   id                     Int                    @id @default(autoincrement())
-  emoji                  String
+  emoji                  String                 @unique
   name                   String?
   known_as               String?
   description            String?
-  codepoint              String?
+  codePoint              String?
   shortCode              String?
+  isLayered              Boolean?               @default(false)
   Unicode_Emoji_Version  Unicode_Emoji_Version? @relation(fields: [versionId], references: [id])
   versionId              Int?
   proposal               String?
   isSupportingByChromium Boolean?               @default(false)
   testedChromiumVersion  String?
-  emojipediaPage         String?
+  slug                   String?                @unique
   keywords               String?
 }

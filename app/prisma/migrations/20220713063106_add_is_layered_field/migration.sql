@@ -1,7 +1,7 @@
 /*
   Warnings:
 
-  - You are about to drop the column `emojipedia_page` on the `Unicode_Emoji` table. All the data in the column will be lost.
+  - You are about to drop the column `codepoint` on the `Unicode_Emoji` table. All the data in the column will be lost.
 
 */
 -- RedefineTables
@@ -12,8 +12,9 @@ CREATE TABLE "new_Unicode_Emoji" (
     "name" TEXT,
     "known_as" TEXT,
     "description" TEXT,
-    "codepoint" TEXT,
+    "codePoint" TEXT,
     "shortCode" TEXT,
+    "isLayered" BOOLEAN DEFAULT false,
     "versionId" INTEGER,
     "proposal" TEXT,
     "isSupportingByChromium" BOOLEAN DEFAULT false,
@@ -22,7 +23,7 @@ CREATE TABLE "new_Unicode_Emoji" (
     "keywords" TEXT,
     CONSTRAINT "Unicode_Emoji_versionId_fkey" FOREIGN KEY ("versionId") REFERENCES "Unicode_Emoji_Version" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
-INSERT INTO "new_Unicode_Emoji" ("codepoint", "description", "emoji", "id", "isSupportingByChromium", "keywords", "known_as", "name", "proposal", "shortCode", "testedChromiumVersion", "versionId") SELECT "codepoint", "description", "emoji", "id", "isSupportingByChromium", "keywords", "known_as", "name", "proposal", "shortCode", "testedChromiumVersion", "versionId" FROM "Unicode_Emoji";
+INSERT INTO "new_Unicode_Emoji" ("description", "emoji", "slug", "id", "isSupportingByChromium", "keywords", "known_as", "name", "proposal", "shortCode", "testedChromiumVersion", "versionId") SELECT "description", "emoji", "slug", "id", "isSupportingByChromium", "keywords", "known_as", "name", "proposal", "shortCode", "testedChromiumVersion", "versionId" FROM "Unicode_Emoji";
 DROP TABLE "Unicode_Emoji";
 ALTER TABLE "new_Unicode_Emoji" RENAME TO "Unicode_Emoji";
 PRAGMA foreign_key_check;
