@@ -191,6 +191,7 @@ export class CrawlerService {
                       if (isEmojiValid) {
                         item = {
                           emoji: emoji,
+                          name: emojiData[1]?.trim(),
                           testedChromiumVersion: chromiumVersion,
                           slug: element.attributes.href.replace(/\//g, ''),
                         };
@@ -251,12 +252,18 @@ export class CrawlerService {
               ),
               shortCodes = parsedHtml.querySelectorAll(
                 '.content article ul.shortcodes li',
+              ),
+              description = parsedHtml.querySelectorAll(
+                'div.content>article>section.description>p',
               );
 
             const finalResult: any = {
               hasZeroWidthSpace: false,
               isLayered: false,
               slug: emoji.slug,
+              description: description
+                ? description.map((x) => x.innerHTML).join('')
+                : '',
             };
 
             // code points
