@@ -28,6 +28,7 @@ export class CrawlerService {
         cachedData = await this.cacheContainer.getItem(cacheKey);
 
       if (cachedData) {
+        console.log(`-> emoji versions, loaed from cache`);
         return resolve(of(cachedData));
       }
 
@@ -86,6 +87,7 @@ export class CrawlerService {
         cachedData = await this.cacheContainer.getItem(cacheKey);
 
       if (cachedData) {
+        console.log(`-> unicode versions, loaed from cache`);
         return resolve(of(cachedData));
       }
 
@@ -147,6 +149,7 @@ export class CrawlerService {
         cachedData = await this.cacheContainer.getItem(cacheKey);
 
       if (cachedData) {
+        console.log(`-> ${type} ${version.tag} emojis, loaed from cache`);
         return resolve(of(cachedData));
       }
 
@@ -234,6 +237,7 @@ export class CrawlerService {
         cachedData = await this.cacheContainer.getItem(cacheKey);
 
       if (cachedData) {
+        console.log(`-> emoji ${emoji.emoji}, loaed from cache`);
         return resolve(of(cachedData));
       }
 
