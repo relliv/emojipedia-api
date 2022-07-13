@@ -2,15 +2,19 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { HttpService } from '@nestjs/axios';
 import { CACHE_MANAGER, Controller, Get, Inject, Param } from '@nestjs/common';
-import { HTMLElement, parse } from 'node-html-parser';
-import { ray } from 'node-ray';
-import { catchError, map, Observable, of, zip } from 'rxjs';
-import puppeteer from 'puppeteer';
+import { map, Observable, of, zip } from 'rxjs';
 import { UnicodeService } from './unicode.service';
-import { VersionService } from './version/version.service';
-import { Prisma, Unicode_Emoji, Unicode_Emoji_Version } from '@prisma/client';
+import { UnicodeVersionService } from './version/unicode-version.service';
+import {
+  Prisma,
+  Unicode_Emoji,
+  Unicode_Emoji_Version,
+  Unicode_Version,
+} from '@prisma/client';
 import { Cache } from 'cache-manager';
 import { CrawlerService } from './crawler/crawler.service';
+import { EmojiVersionService } from './version/emoji-version.service';
+import { ray } from 'node-ray';
 
 @Controller('unicode')
 export class UnicodeController {
@@ -19,7 +23,8 @@ export class UnicodeController {
   constructor(
     private readonly httpService: HttpService,
     private readonly unicodeService: UnicodeService,
-    private readonly versionService: VersionService,
+    private readonly unicodeVersionService: UnicodeVersionService,
+    private readonly emojiVersionService: EmojiVersionService,
     private readonly crawlerService: CrawlerService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
@@ -32,34 +37,71 @@ export class UnicodeController {
   @Get('versions')
   public async getVersions(): Promise<Observable<any>> {
     return await new Promise(async (resolve) => {
-      return (await this.crawlerService.crawlVersions())
-        .pipe(
-          map(async (results) => {
-            const versionCreateJobs = results.map(
-              async (item: Prisma.Unicode_Emoji_VersionCreateInput) => {
-                await this.versionService.create(item);
-              },
-            );
+      const emojiVersions = (
+        await this.crawlerService.crawlEmojiVersions()
+      ).pipe(
+        map(async (results) => {
+          const versionCreateJobs = results.map(
+            async (item: Prisma.Unicode_Emoji_VersionCreateInput) => {
+              await this.emojiVersionService.create(item);
+            },
+          );
 
-            return zip(versionCreateJobs).subscribe({
-              complete: async () => {
-                const versions: Unicode_Emoji_Version[] = (
-                  await this.versionService.listAll({
-                    orderBy: {
-                      tag: 'asc',
-                    },
-                  })
-                ).sort((a, b) => parseFloat(a.tag) - parseFloat(b.tag));
+          return zip(versionCreateJobs).subscribe({
+            complete: async () => {
+              console.log('version fetch done');
+            },
+          });
+        }),
+      );
 
-                resolve(of(this.getEmojiVersionListHtml(versions)));
-                resolve(of(versions));
+      const unicodeVersions = (
+        await this.crawlerService.crawlUnicodeVersions()
+      ).pipe(
+        map(async (results) => {
+          const versionCreateJobs = results.map(
+            async (item: Prisma.Unicode_VersionCreateInput) => {
+              await this.unicodeVersionService.create(item);
+            },
+          );
+
+          return zip(versionCreateJobs).subscribe({
+            complete: async () => {
+              console.log('version fetch successful');
+            },
+          });
+        }),
+      );
+
+      return zip(emojiVersions, unicodeVersions).subscribe({
+        complete: async () => {
+          const emojiVersions: Unicode_Emoji_Version[] = (
+            await this.emojiVersionService.listAll({
+              orderBy: {
+                tag: 'asc',
               },
-            });
-          }),
-        )
-        .subscribe(() => {
-          console.log('version fetch successful');
-        });
+            })
+          ).sort((a, b) => parseFloat(a.tag) - parseFloat(b.tag));
+
+          const unicodeVersions: Unicode_Version[] = (
+            await this.unicodeVersionService.listAll({
+              orderBy: {
+                tag: 'asc',
+              },
+            })
+          ).sort((a, b) => parseFloat(a.tag) - parseFloat(b.tag));
+
+          resolve(
+            of(
+              (await this.getEmojiVersionListHtml(emojiVersions, 'emoji')) +
+                (await this.getEmojiVersionListHtml(
+                  unicodeVersions,
+                  'unicode',
+                )),
+            ),
+          );
+        },
+      });
     });
   }
 
@@ -69,31 +111,74 @@ export class UnicodeController {
    * @param versionTag string
    * @returns Promise<Observable<any>>
    */
-  @Get('version/:version')
+  @Get('version/:type/:version')
   public async getEmojisByVersion(
+    @Param('type') type: string,
     @Param('version') versionTag: string,
   ): Promise<Observable<any>> {
-    const version: Unicode_Emoji_Version = await this.versionService.findOne({
-      tag: versionTag,
-    });
+    const unicodeVersion: Unicode_Version =
+      await this.unicodeVersionService.findOne({
+        tag: versionTag,
+      });
+
+    const emojiVersion: Unicode_Emoji_Version =
+      await this.emojiVersionService.findOne({
+        tag: versionTag,
+      });
+
+    const version = emojiVersion || unicodeVersion;
 
     return await new Promise(async (resolve) => {
       if (!version) {
         resolve(of(`<h3>Given version not found</h3>`));
       }
 
-      return (await this.crawlerService.crawlEmojiListByVersion(version))
+      return (await this.crawlerService.crawlEmojiListByVersion(type, version))
         .pipe(
           map(async (results) => {
             const emojiCreateJobs = results.map(
               async (item: Prisma.Unicode_EmojiCreateInput) => {
                 try {
-                  await this.unicodeService.create(<any>{
-                    ...item,
-                    ...{
-                      versionId: version.id,
-                    },
+                  const hasEmoji = await this.unicodeService.findOne({
+                    emoji: item.emoji,
                   });
+
+                  if (hasEmoji) {
+                    if (
+                      !hasEmoji.unicode_VersionId &&
+                      unicodeVersion &&
+                      hasEmoji.unicode_VersionId !== unicodeVersion.id
+                    ) {
+                      hasEmoji.unicode_VersionId =
+                        unicodeVersion?.id || hasEmoji.unicode_VersionId;
+                    }
+
+                    if (
+                      !hasEmoji.unicode_Emoji_VersionId &&
+                      emojiVersion &&
+                      hasEmoji.unicode_Emoji_VersionId !== emojiVersion.id
+                    ) {
+                      hasEmoji.unicode_Emoji_VersionId =
+                        emojiVersion?.id || hasEmoji.unicode_Emoji_VersionId;
+                    }
+
+                    await this.unicodeService.update(<any>{
+                      where: {
+                        id: hasEmoji.id,
+                      },
+                      data: {
+                        ...hasEmoji,
+                      },
+                    });
+                  } else {
+                    await this.unicodeService.create(<any>{
+                      ...item,
+                      ...{
+                        unicode_VersionId: unicodeVersion?.id,
+                        unicode_Emoji_VersionId: emojiVersion?.id,
+                      },
+                    });
+                  }
                 } catch (error) {
                   // TODO: fix "Timed out during query execution." error
                   console.log(error);
@@ -103,21 +188,32 @@ export class UnicodeController {
 
             return zip(emojiCreateJobs).subscribe({
               complete: async () => {
-                const emojis: Unicode_Emoji[] =
-                  await this.unicodeService.listAll({
+                let emojis: Unicode_Emoji[];
+
+                if (unicodeVersion) {
+                  emojis = await this.unicodeService.listAll({
                     where: {
-                      versionId: version.id,
+                      unicode_VersionId: unicodeVersion.id,
                     },
                   });
+                } else if (emojiVersion) {
+                  emojis = await this.unicodeService.listAll({
+                    where: {
+                      unicode_Emoji_VersionId: emojiVersion.id,
+                    },
+                  });
+                }
 
-                resolve(of(this.getEmojiListofVersionHtml(version, emojis)));
-                resolve(of(emojis));
+                resolve(
+                  of(this.getEmojiListofVersionHtml(version, emojis, type)),
+                );
+                // resolve(of(emojis));
               },
             });
           }),
         )
         .subscribe(() => {
-          console.log('emojis of target version fetch successful');
+          console.log(`${type}s of target version fetch successful`);
         });
     });
   }
@@ -136,7 +232,6 @@ export class UnicodeController {
     });
 
     return await new Promise(async (resolve) => {
-      ray(emoji);
       if (!slug) {
         resolve(of(`<h3>Given emoji not found</h3>`));
       }
@@ -180,7 +275,10 @@ export class UnicodeController {
    * @param versions list of version
    * @returns string
    */
-  private async getEmojiVersionListHtml(versions: any) {
+  private async getEmojiVersionListHtml(
+    versions: any,
+    type: string,
+  ): Promise<string> {
     const versionsList = versions
       .filter(
         (x: any) =>
@@ -188,8 +286,8 @@ export class UnicodeController {
           (x.tag != '3.1' || x.tag != '5.0' || x.tag != '16.0'), // exclude empty versions
       )
       .map((item) => {
-        return `await fetch('http://localhost:3000/crawler/unicode/version/${item.tag}');
-        await new Promise(resolve => setTimeout(resolve, 2000));`;
+        return `await fetch('http://localhost:3000/crawler/unicode/version/${type}/${item.tag}');
+        await new Promise(resolve => setTimeout(resolve, 3000));`;
       })
       .join('');
 
@@ -205,29 +303,33 @@ export class UnicodeController {
 
               ----
 
-              <a href="https://emojipedia.org/unicode-${version.tag}/" target="_blank">
+              <a href="https://emojipedia.org/${type}-${version.tag}/" target="_blank">
                 emojipedia.org
               </a>
             </li>`,
         )
         .join('') +
       '</ul>' +
-      (await this.getEmojiListofAllHtml()) +
+      (await this.getEmojiListofAllHtml(type)) +
       'Refresh to fetch new emojis' +
       `<script>
         setTimeout(() => {
           (async () => {
-            ${versionsList}
+           ${versionsList}
           })();
         }, 5000);
       </script>`
     );
   }
 
-  private async getEmojiListofVersionHtml(version: any, emojis: any) {
+  private async getEmojiListofVersionHtml(
+    version: any,
+    emojis: any,
+    type: string,
+  ) {
     return (
       '<a href="../versions">Return Back</a>' +
-      `<h3>Unicode Emojis for v${version.tag} (${emojis.length})</h3>  <div style="font-size: 40px; display: flex; flex-wrap: wrap;">` +
+      `<h3>${type} Emojis for v${version.tag} (${emojis.length})</h3>  <div style="font-size: 40px; display: flex; flex-wrap: wrap;">` +
       emojis
         .map(
           (item: any) =>
@@ -244,15 +346,35 @@ export class UnicodeController {
     );
   }
 
-  private async getEmojiListofAllHtml() {
-    const emojis: Unicode_Emoji[] = await this.unicodeService.listAll({
-      where: {
-        isSupportingByChromium: true,
-      },
-      orderBy: {
-        emoji: 'desc',
-      },
-    });
+  private async getEmojiListofAllHtml(type: string) {
+    const emojis: Unicode_Emoji[] =
+      type === 'emoji'
+        ? await this.unicodeService.listAll({
+            where: {
+              isSupportingByChromium: true,
+              NOT: [
+                {
+                  unicode_Emoji_VersionId: null,
+                },
+              ],
+            },
+            orderBy: {
+              emoji: 'desc',
+            },
+          })
+        : await this.unicodeService.listAll({
+            where: {
+              isSupportingByChromium: true,
+              NOT: [
+                {
+                  unicode_VersionId: null,
+                },
+              ],
+            },
+            orderBy: {
+              emoji: 'desc',
+            },
+          });
 
     return (
       '<a href="../versions">Return Back</a>' +

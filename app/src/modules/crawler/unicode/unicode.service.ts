@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Unicode_Emoji, Prisma, Unicode_Emoji_Version } from '@prisma/client';
+import { Unicode_Emoji, Prisma } from '@prisma/client';
 import { PrismaService } from 'src/shared/services/prisma/prisma.service';
 
 @Injectable()
@@ -11,6 +11,24 @@ export class UnicodeService {
   ): Promise<Unicode_Emoji | null> {
     return this.prisma.unicode_Emoji.findUnique({
       where: userWhereUniqueInput,
+    });
+  }
+
+  async findByFirst({ where }): Promise<Unicode_Emoji | null> {
+    return this.prisma.unicode_Emoji.findFirst({
+      where: where,
+    });
+  }
+
+  async searchOneByVersionId(
+    unicodeVersionId: number | null,
+    emojiVersionId: number | null,
+  ): Promise<Unicode_Emoji | null> {
+    return this.prisma.unicode_Emoji.findFirst({
+      where: {
+        unicode_Emoji_VersionId: emojiVersionId,
+        unicode_VersionId: unicodeVersionId,
+      },
     });
   }
 
@@ -41,6 +59,7 @@ export class UnicodeService {
       orderBy,
       include: {
         Unicode_Emoji_Version: true,
+        Unicode_Version: true,
       },
     });
   }
@@ -48,7 +67,7 @@ export class UnicodeService {
   async create(data: Prisma.Unicode_EmojiCreateInput): Promise<Unicode_Emoji> {
     const hasRecord = await this.prisma.unicode_Emoji.findFirst({
       where: {
-        emoji: data.emoji,
+        slug: data.slug,
       },
     });
 
@@ -66,9 +85,10 @@ export class UnicodeService {
     data: Prisma.Unicode_EmojiUpdateInput;
   }): Promise<Unicode_Emoji> {
     const { where, data } = params;
+
     return this.prisma.unicode_Emoji.update({
-      data,
       where,
+      data,
     });
   }
 

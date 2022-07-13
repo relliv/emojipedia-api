@@ -3,7 +3,7 @@ import { Unicode_Emoji_Version, Prisma } from '@prisma/client';
 import { PrismaService } from 'src/shared/services/prisma/prisma.service';
 
 @Injectable()
-export class VersionService {
+export class EmojiVersionService {
   constructor(private prisma: PrismaService) {}
 
   async findOne(

@@ -10,6 +10,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Unicode_Version {
+  id            Int             @id @default(autoincrement())
+  tag           String          @unique
+  Unicode_Emoji Unicode_Emoji[]
+}
+
 model Unicode_Emoji_Version {
   id            Int             @id @default(autoincrement())
   tag           String          @unique
@@ -17,19 +23,21 @@ model Unicode_Emoji_Version {
 }
 
 model Unicode_Emoji {
-  id                     Int                    @id @default(autoincrement())
-  emoji                  String                 @unique
-  name                   String?
-  known_as               String?
-  description            String?
-  codePoint              String?
-  shortCode              String?
-  isLayered              Boolean?               @default(false)
-  Unicode_Emoji_Version  Unicode_Emoji_Version? @relation(fields: [versionId], references: [id])
-  versionId              Int?
-  proposal               String?
-  isSupportingByChromium Boolean?               @default(false)
-  testedChromiumVersion  String?
-  slug                   String?                @unique
-  keywords               String?
+  id                      Int                    @id @default(autoincrement())
+  emoji                   String                 @unique
+  name                    String?
+  known_as                String?
+  description             String?
+  codePoint               String?
+  shortCode               String?
+  isLayered               Boolean?               @default(false)
+  Unicode_Emoji_Version   Unicode_Emoji_Version? @relation(fields: [unicode_Emoji_VersionId], references: [id])
+  unicode_Emoji_VersionId Int?
+  proposal                String?
+  isSupportingByChromium  Boolean?               @default(false)
+  testedChromiumVersion   String?
+  slug                    String?                @unique
+  keywords                String?
+  Unicode_Version         Unicode_Version?       @relation(fields: [unicode_VersionId], references: [id])
+  unicode_VersionId       Int?
 }

@@ -3,8 +3,9 @@ import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 import { UnicodeController } from './unicode.controller';
 import { UnicodeService } from './unicode.service';
-import { VersionService } from './version/version.service';
+import { UnicodeVersionService } from './version/unicode-version.service';
 import { CrawlerService } from './crawler/crawler.service';
+import { EmojiVersionService } from './version/emoji-version.service';
 
 @Module({
   imports: [
@@ -16,6 +17,12 @@ import { CrawlerService } from './crawler/crawler.service';
     }),
   ],
   controllers: [UnicodeController],
-  providers: [UnicodeService, PrismaService, VersionService, CrawlerService],
+  providers: [
+    UnicodeService,
+    PrismaService,
+    UnicodeVersionService,
+    EmojiVersionService,
+    CrawlerService,
+  ],
 })
 export class UnicodeModule {}

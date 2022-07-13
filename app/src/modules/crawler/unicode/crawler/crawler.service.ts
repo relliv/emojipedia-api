@@ -20,7 +20,7 @@ export class CrawlerService {
     );
   }
 
-  public async crawlVersions(): Promise<Observable<any>> {
+  public async crawlEmojiVersions(): Promise<Observable<any>> {
     return new Promise(async (resolve) => {
       const cacheKey = 'unicode:emoji:versions',
         cachedData = await this.cacheContainer.getItem(cacheKey);
@@ -34,17 +34,18 @@ export class CrawlerService {
         .pipe(
           map(async (res) => {
             const parsedHtml = parse(res.data),
-              unicodeVersionItems = parsedHtml.querySelectorAll(
-                'div.unicode-version>ul:nth-child(4) li>a',
+              versionItems = parsedHtml.querySelectorAll(
+                "footer .unicode-version ul li a[href^='/emoji-']",
               );
 
-            if (unicodeVersionItems && unicodeVersionItems.length > 0) {
-              const results = unicodeVersionItems
+            if (versionItems && versionItems.length > 0) {
+              const results = versionItems
                 .map((element: HTMLElement) => {
                   if (element.attributes && element.attributes.href) {
-                    if (element.attributes.href.startsWith('/unicode-')) {
-                      const versionData = element.innerText.split('Unicode ');
+                    if (element.attributes.href.startsWith('/emoji-')) {
+                      const versionData = element.innerText.split('Emoji ');
 
+                      ray(versionData);
                       const item = <Prisma.Unicode_Emoji_VersionCreateInput>{
                         tag: versionData[1] || 0,
                       };
@@ -55,12 +56,74 @@ export class CrawlerService {
                 })
                 .filter((x) => x.tag);
 
-              this.cacheContainer.setItem(cacheKey, results, {
-                ttl: this.cacheTtl,
-              });
+              if (results) {
+                this.cacheContainer.setItem(cacheKey, results, {
+                  ttl: this.cacheTtl,
+                });
+              }
 
               resolve(of(results ? results : []));
             }
+
+            resolve(of([]));
+          }),
+          catchError((error: any) => {
+            resolve(of([]));
+
+            console.log(error.message);
+
+            return of(error.message);
+          }),
+        )
+        .toPromise();
+    });
+  }
+
+  public async crawlUnicodeVersions(): Promise<Observable<any>> {
+    return new Promise(async (resolve) => {
+      const cacheKey = 'unicode:versions',
+        cachedData = await this.cacheContainer.getItem(cacheKey);
+
+      if (cachedData) {
+        return resolve(of(cachedData));
+      }
+
+      return await this.httpService
+        .get('https://emojipedia.org/')
+        .pipe(
+          map(async (res) => {
+            const parsedHtml = parse(res.data),
+              versionItems = parsedHtml.querySelectorAll(
+                "footer .unicode-version ul li a[href^='/unicode-']",
+              );
+
+            if (versionItems && versionItems.length > 0) {
+              const results = versionItems
+                .map((element: HTMLElement) => {
+                  if (element.attributes && element.attributes.href) {
+                    if (element.attributes.href.startsWith('/unicode-')) {
+                      const versionData = element.innerText.split('Unicode ');
+
+                      const item = <Prisma.Unicode_VersionCreateInput>{
+                        tag: versionData[1] || 0,
+                      };
+
+                      return item;
+                    }
+                  }
+                })
+                .filter((x) => x.tag);
+
+              if (results) {
+                this.cacheContainer.setItem(cacheKey, results, {
+                  ttl: this.cacheTtl,
+                });
+              }
+
+              resolve(of(results ? results : []));
+            }
+
+            resolve(of([]));
           }),
           catchError((error: any) => {
             resolve(of([]));
@@ -75,27 +138,25 @@ export class CrawlerService {
   }
 
   public async crawlEmojiListByVersion(
+    type: string,
     version: Unicode_Emoji_Version,
   ): Promise<Observable<any>> {
     return new Promise(async (resolve) => {
       const cacheKey = `unicode:emoji:list:v-${version.tag}`,
         cachedData = await this.cacheContainer.getItem(cacheKey);
 
-      ray(cachedData, cacheKey);
       if (cachedData) {
         return resolve(of(cachedData));
       }
 
       return await this.httpService
-        .get(`https://emojipedia.org/unicode-${version.tag}/`)
+        .get(`https://emojipedia.org/${type}-${version.tag}/`)
         .pipe(
           map(async (res) => {
             const parsedHtml = parse(res.data),
               unicodeEmojiItems = parsedHtml.querySelectorAll(
                 'div.content>article>ul:nth-child(3) li>a, div.content>article>ul:nth-child(4) li>a',
               );
-
-            ray(res.data);
 
             if (unicodeEmojiItems && unicodeEmojiItems.length > 0) {
               // fix protocol issue: https://github.com/puppeteer/puppeteer/issues/1175
