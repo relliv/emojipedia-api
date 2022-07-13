@@ -8,6 +8,8 @@ import { Prisma, Unicode_Emoji, Unicode_Emoji_Version } from '@prisma/client';
 import puppeteer from 'puppeteer';
 import { ray } from 'node-ray';
 
+import keyword_extractor from 'keyword-extractor';
+
 @Injectable()
 export class CrawlerService {
   private cacheContainer: CacheContainer;
@@ -242,35 +244,70 @@ export class CrawlerService {
             const parsedHtml = parse(res.data),
               codepoints = parsedHtml.querySelectorAll(
                 "ul li a[href^='/emoji/']:not([title])",
+              ),
+              shortCodes = parsedHtml.querySelectorAll(
+                '.content article ul.shortcodes li',
               );
 
+            const finalResult: any = {
+              hasZeroWidthSpace: false,
+              isLayered: false,
+              slug: emoji.slug,
+            };
+
+            // code points
             if (codepoints && codepoints.length > 0) {
-              const results = codepoints
+              const codePointRsults = codepoints
                 .map((element: HTMLElement) => {
                   if (element.attributes && element.attributes.href) {
                     if (element.attributes.href.startsWith('/emoji/')) {
-                      const codepointData = element.innerText.split(' ');
+                      const codepointData = element.innerText.split(' '),
+                        codepoint = codepointData[1]?.trim();
 
-                      return <Prisma.Unicode_EmojiCreateInput>{
-                        codePoint: codepointData[1] || 0,
-                      };
+                      // remove zero width spaces
+                      // source: https://stackoverflow.com/a/11305926/6940144
+                      const zeroWidthSpace = codepointData[0]
+                        ?.trim()
+                        .replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+                      if (zeroWidthSpace.length === 0) {
+                        finalResult.hasZeroWidthSpace = true;
+                      }
+
+                      return codepoint;
                     }
                   }
                 })
-                .filter((x) => x && x.codePoint);
+                .filter((x) => x && x.length > 0)
+                .join(',');
 
-              //   this.cacheContainer.setItem(cacheKey, results, {
-              //     ttl: this.cacheTtl,
-              //   });
-
-              const result = {
-                codepoints: results,
-              };
-
-              resolve(of(result ? result : {}));
+              finalResult.codePoint = codePointRsults;
+              finalResult.isLayered = codePointRsults.includes(',');
             }
 
-            resolve(of({}));
+            // short
+            if (shortCodes && shortCodes.length > 0) {
+              const shortCodeResults = shortCodes
+                .map((item: HTMLElement) => {
+                  const shortCodeData = item.innerText.split(' ')[0],
+                    regex = new RegExp(/:[a-z0-9_]+:/),
+                    shortCode = shortCodeData.match(regex);
+
+                  if (shortCode) {
+                    return shortCode;
+                  }
+                })
+                .filter((x, pos, self) => x && self.indexOf(x) == pos)
+                .join(',');
+
+              finalResult.shortCode = shortCodeResults;
+            }
+
+            this.cacheContainer.setItem(cacheKey, finalResult, {
+              ttl: this.cacheTtl,
+            });
+
+            resolve(of(finalResult ? finalResult : {}));
           }),
           catchError((error: any) => {
             resolve(of([]));

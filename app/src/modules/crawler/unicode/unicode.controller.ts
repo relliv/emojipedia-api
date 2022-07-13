@@ -1,5 +1,3 @@
-/* eslint-disable no-var */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { HttpService } from '@nestjs/axios';
 import { CACHE_MANAGER, Controller, Get, Inject, Param } from '@nestjs/common';
 import { map, Observable, of, zip } from 'rxjs';
@@ -138,81 +136,112 @@ export class UnicodeController {
       return (await this.crawlerService.crawlEmojiListByVersion(type, version))
         .pipe(
           map(async (results) => {
-            const emojiCreateJobs = results.map(
-              async (item: Prisma.Unicode_EmojiCreateInput) => {
-                try {
-                  const hasEmoji = await this.unicodeService.findOne({
-                    slug: item.slug,
-                  });
+            for (let i = 0; i < results.length; i++) {
+              const item = results[i];
 
-                  if (hasEmoji) {
-                    if (
-                      type === 'unicode' &&
-                      !hasEmoji.unicode_VersionId &&
-                      hasEmoji.unicode_VersionId !== unicodeVersion.id
-                    ) {
-                      hasEmoji.unicode_VersionId =
-                        unicodeVersion?.id || hasEmoji.unicode_VersionId;
-                    }
+              try {
+                const hasEmoji = await this.unicodeService.findOne({
+                  slug: item.slug,
+                });
 
-                    if (
-                      type === 'emoji' &&
-                      !hasEmoji.unicode_Emoji_VersionId &&
-                      emojiVersion &&
-                      hasEmoji.unicode_Emoji_VersionId !== emojiVersion.id
-                    ) {
-                      hasEmoji.unicode_Emoji_VersionId =
-                        emojiVersion?.id || hasEmoji.unicode_Emoji_VersionId;
-                    }
+                if (hasEmoji) {
+                  if (
+                    type === 'unicode' &&
+                    !hasEmoji.unicode_VersionId &&
+                    hasEmoji.unicode_VersionId !== unicodeVersion.id
+                  ) {
+                    hasEmoji.unicode_VersionId =
+                      unicodeVersion?.id || hasEmoji.unicode_VersionId;
+                  }
 
-                    await this.unicodeService.update(<any>{
-                      where: {
+                  if (
+                    type === 'emoji' &&
+                    !hasEmoji.unicode_Emoji_VersionId &&
+                    emojiVersion &&
+                    hasEmoji.unicode_Emoji_VersionId !== emojiVersion.id
+                  ) {
+                    hasEmoji.unicode_Emoji_VersionId =
+                      emojiVersion?.id || hasEmoji.unicode_Emoji_VersionId;
+                  }
+
+                  await this.unicodeService
+                    .update({
+                      where: <Prisma.Unicode_EmojiWhereUniqueInput>{
                         id: hasEmoji.id,
                       },
-                      data: {
+                      data: <Prisma.Unicode_EmojiUpdateInput>{
                         ...hasEmoji,
                       },
+                    })
+                    .then(() => {
+                      console.log(`update emoji ${hasEmoji.emoji} successful`);
                     });
-                  } else {
-                    await this.unicodeService.create(<any>{
+                } else {
+                  await this.unicodeService
+                    .create(<any>{
                       ...item,
                       ...{
                         unicode_VersionId: unicodeVersion?.id,
                         unicode_Emoji_VersionId: emojiVersion?.id,
                       },
+                    })
+                    .then(() => {
+                      console.log(`create emoji ${item.emoji} successful`);
                     });
-                  }
-                } catch (error) {
-                  // TODO: fix "Timed out during query execution." error
-                  console.log(error);
                 }
-              },
-            );
+              } catch (error) {
+                console.log(error);
+              }
+            }
 
-            return zip(emojiCreateJobs).subscribe({
-              complete: async () => {
-                let emojis: Unicode_Emoji[];
+            let emojis: Unicode_Emoji[];
 
-                if (type === 'unicode') {
-                  emojis = await this.unicodeService.listAll({
-                    where: {
-                      unicode_VersionId: version.id,
-                    },
-                  });
-                } else if (emojiVersion) {
-                  emojis = await this.unicodeService.listAll({
-                    where: {
-                      unicode_Emoji_VersionId: version.id,
-                    },
-                  });
-                }
+            if (type === 'unicode') {
+              emojis = await this.unicodeService.listAll({
+                where: {
+                  unicode_VersionId: version.id,
+                },
+              });
+            } else if (emojiVersion) {
+              emojis = await this.unicodeService.listAll({
+                where: {
+                  unicode_Emoji_VersionId: version.id,
+                },
+              });
+            }
 
-                resolve(
-                  of(this.getEmojiListofVersionHtml(version, emojis, type)),
-                );
-                // resolve(of(emojis));
-              },
-            });
+            for (let i = 0; i < emojis.length; i++) {
+              const emoji = emojis[i];
+
+              if (!emoji.codePoint) {
+                (await this.crawlerService.crawlEmojiDetails(emoji))
+                  .pipe(
+                    map(async (details) => {
+                      if (!emoji.codePoint) {
+                        await this.unicodeService
+                          .update(<any>{
+                            where: {
+                              id: emoji.id,
+                            },
+                            data: <Prisma.Unicode_EmojiUpdateInput>{
+                              ...details,
+                            },
+                          })
+                          .finally(() => {
+                            console.log(
+                              `emoji ${emoji.emoji}: ${emoji.slug} details updated`,
+                            );
+                          });
+                      }
+
+                      return details;
+                    }),
+                  )
+                  .subscribe();
+              }
+            }
+
+            resolve(of(this.getEmojiListofVersionHtml(version, emojis, type)));
           }),
         )
         .subscribe(() => {
@@ -235,35 +264,28 @@ export class UnicodeController {
     });
 
     return await new Promise(async (resolve) => {
-      if (!slug) {
+      if (!slug || !emoji) {
         resolve(of(`<h3>Given emoji not found</h3>`));
       }
 
       return (await this.crawlerService.crawlEmojiDetails(emoji))
         .pipe(
           map(async (results) => {
-            resolve(of(results));
+            const data = {
+              ...emoji,
+              ...results,
+            };
 
-            // const versionCreateJobs = results.map(
-            //   async (item: Prisma.Unicode_Emoji_VersionCreateInput) => {
-            //     await this.versionService.create(item);
-            //   },
-            // );
-
-            // return zip(versionCreateJobs).subscribe({
-            //   complete: async () => {
-            //     const versions: Unicode_Emoji_Version[] = (
-            //       await this.versionService.listAll({
-            //         orderBy: {
-            //           tag: 'asc',
-            //         },
-            //       })
-            //     ).sort((a, b) => parseFloat(a.tag) - parseFloat(b.tag));
-
-            //     resolve(of(this.getEmojiVersionListHtml(versions)));
-            //     resolve(of(versions));
-            //   },
-            // });
+            await this.unicodeService
+              .update({
+                where: {
+                  id: emoji.id,
+                },
+                data: data,
+              })
+              .finally(() => {
+                resolve(of(emoji));
+              });
           }),
         )
         .subscribe(() => {
@@ -286,7 +308,7 @@ export class UnicodeController {
       .filter((x) => x._count.Unicode_Emoji === 0)
       .map((item) => {
         return `await fetch('http://localhost:3000/crawler/unicode-emoji/version/${type}/${item.tag}');
-        await new Promise(resolve => setTimeout(resolve, 2500));`;
+        await new Promise(resolve => setTimeout(resolve, 1500));`;
       })
       .join('');
 

@@ -26,15 +26,14 @@ model Unicode_Emoji {
   id                      Int                    @id @default(autoincrement())
   emoji                   String                 @unique
   name                    String?
-  known_as                String?
   description             String?
   codePoint               String?
   shortCode               String?
   isLayered               Boolean?               @default(false)
   Unicode_Emoji_Version   Unicode_Emoji_Version? @relation(fields: [unicode_Emoji_VersionId], references: [id])
   unicode_Emoji_VersionId Int?
-  proposal                String?
   isSupportingByChromium  Boolean?               @default(false)
+  hasZeroWidthSpace       Boolean?               @default(false)
   testedChromiumVersion   String?
   slug                    String?                @unique
   keywords                String?
