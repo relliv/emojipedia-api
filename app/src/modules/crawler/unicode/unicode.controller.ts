@@ -152,6 +152,21 @@ export class UnicodeController {
                   ) {
                     hasEmoji.unicode_VersionId =
                       unicodeVersion?.id || hasEmoji.unicode_VersionId;
+
+                    await this.unicodeService
+                      .update({
+                        where: <Prisma.Unicode_EmojiWhereUniqueInput>{
+                          id: hasEmoji.id,
+                        },
+                        data: <Prisma.Unicode_EmojiUpdateInput>{
+                          ...hasEmoji,
+                        },
+                      })
+                      .then(() => {
+                        console.log(
+                          `update unicode version ${hasEmoji.emoji} successful`,
+                        );
+                      });
                   }
 
                   if (
@@ -162,20 +177,22 @@ export class UnicodeController {
                   ) {
                     hasEmoji.unicode_Emoji_VersionId =
                       emojiVersion?.id || hasEmoji.unicode_Emoji_VersionId;
-                  }
 
-                  await this.unicodeService
-                    .update({
-                      where: <Prisma.Unicode_EmojiWhereUniqueInput>{
-                        id: hasEmoji.id,
-                      },
-                      data: <Prisma.Unicode_EmojiUpdateInput>{
-                        ...hasEmoji,
-                      },
-                    })
-                    .then(() => {
-                      console.log(`update emoji ${hasEmoji.emoji} successful`);
-                    });
+                    await this.unicodeService
+                      .update({
+                        where: <Prisma.Unicode_EmojiWhereUniqueInput>{
+                          id: hasEmoji.id,
+                        },
+                        data: <Prisma.Unicode_EmojiUpdateInput>{
+                          ...hasEmoji,
+                        },
+                      })
+                      .then(() => {
+                        console.log(
+                          `update emoji version ${hasEmoji.emoji} successful`,
+                        );
+                      });
+                  }
                 } else {
                   await this.unicodeService
                     .create(<any>{
@@ -186,7 +203,9 @@ export class UnicodeController {
                       },
                     })
                     .then(() => {
-                      console.log(`create emoji ${item.emoji} successful`);
+                      console.log(
+                        `create emoji unicode version ${item.emoji} successful`,
+                      );
                     });
                 }
               } catch (error) {
