@@ -354,6 +354,80 @@ export class CrawlerService {
     });
   }
 
+  public async crawlEmojiGroups(): Promise<Observable<any>> {
+    return new Promise(async (resolve) => {
+      const cacheKey = 'unicode:emoji:groups',
+        cachedData = await this.cacheManager.get(cacheKey);
+
+      if (cachedData) {
+        console.log(`-> emoji groups, loaed from cache`);
+        return resolve(of(cachedData));
+      }
+
+      return await this.httpService
+        .get('https://unicode.org/Public/emoji/14.0/emoji-test.txt')
+        .pipe(
+          map(async (res) => {
+            const rawTxt: string = res.data.split(
+              'The groups and subgroups are illustrative. See the Emoji Order chart for more information.',
+            )[1];
+
+            const groups = rawTxt.split(/\n# subgroup: ([a-z-]+)/g),
+              groupTitleRegex = /^[a-z-]+$/;
+
+            const finalResult: any[] = [];
+
+            for (let i = 0; i < groups.length; i++) {
+              const groupItem = groups[i];
+
+              if (groupTitleRegex.test(groupItem)) {
+                const emojisData = !groupTitleRegex.test(groups[i + 1])
+                  ? groups[i + 1]
+                  : null;
+
+                if (emojisData) {
+                  //  / # (\p{Extended_Pictographic}) E/gmu,
+                  const regex = new RegExp(/# (.*) E[0-9]{1,2}.[0-9]{1,2} /gm),
+                    emojis = emojisData
+                      .match(regex)
+                      .map((x) =>
+                        x
+                          .replace('#', '')
+                          .replace(' ', '')
+                          .split('E')[0]
+                          .trim(),
+                      );
+
+                  const group = {
+                    name: groupItem,
+                    emojis: emojis,
+                  };
+
+                  finalResult.push(group);
+                }
+              }
+            }
+
+            if (finalResult.length) {
+              this.cacheManager.set(cacheKey, finalResult);
+
+              resolve(of(finalResult));
+            }
+
+            resolve(of([]));
+          }),
+          catchError((error: any) => {
+            resolve(of([]));
+
+            console.log(error.message);
+
+            return of(error.message);
+          }),
+        )
+        .toPromise();
+    });
+  }
+
   /**
    * Check given emoji is supporting by headless chromium
    *

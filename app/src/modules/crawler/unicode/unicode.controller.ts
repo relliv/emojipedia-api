@@ -313,6 +313,47 @@ export class UnicodeController {
     });
   }
 
+  @Get('groups')
+  public async getGroups(): Promise<Observable<any>> {
+    return await new Promise(async (resolve) => {
+      (await this.crawlerService.crawlEmojiGroups()).subscribe(
+        async (groups) => {
+          if (groups.length > 0) {
+            for (let i = 0; i < groups.length; i++) {
+              const group = groups[i];
+
+              for (let j = 0; j < group.emojis.length; j++) {
+                const emoji = group.emojis[j];
+
+                const hasEmoji: Unicode_Emoji =
+                  await this.unicodeService.findOne({
+                    emoji: emoji,
+                  });
+
+                if (hasEmoji && !hasEmoji.groupName) {
+                  hasEmoji.groupName = group.name;
+
+                  await this.unicodeService
+                    .update({
+                      where: {
+                        id: hasEmoji.id,
+                      },
+                      data: hasEmoji,
+                    })
+                    .finally(() => {
+                      console.log(`emoji ${emoji} group updated`);
+                    });
+                }
+              }
+            }
+          }
+
+          resolve(of(groups));
+        },
+      );
+    });
+  }
+
   /**
    * Spaghetti UI for crawling unicode emoji
    *

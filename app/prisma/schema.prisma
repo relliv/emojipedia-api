@@ -37,6 +37,7 @@ model Unicode_Emoji {
   testedChromiumVersion   String?
   slug                    String?                @unique
   keywords                String?
+  groupName               String?
   Unicode_Version         Unicode_Version?       @relation(fields: [unicode_VersionId], references: [id])
   unicode_VersionId       Int?
 }
