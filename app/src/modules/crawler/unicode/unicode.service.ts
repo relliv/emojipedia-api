@@ -4,7 +4,7 @@ import { PrismaService } from 'src/shared/services/prisma/prisma.service';
 
 @Injectable()
 export class UnicodeService {
-  constructor(private prisma: PrismaService) {}
+  constructor(public prisma: PrismaService) {}
 
   async findOne(
     userWhereUniqueInput: Prisma.Unicode_EmojiWhereUniqueInput,
@@ -54,7 +54,8 @@ export class UnicodeService {
     orderBy?: Prisma.Unicode_EmojiOrderByWithRelationInput;
   }): Promise<Unicode_Emoji[]> {
     const { where, orderBy } = params;
-    return this.prisma.unicode_Emoji.findMany({
+
+    return this.prisma.unicode_Emoji.findMany(<any>{
       where,
       orderBy,
       include: {

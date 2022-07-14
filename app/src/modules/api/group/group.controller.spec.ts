@@ -1,15 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnicodeController } from './unicode.controller';
+import { GroupController } from './group.controller';
 
-describe('UnicodeController', () => {
-  let controller: UnicodeController;
+describe('GroupController', () => {
+  let controller: GroupController;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [UnicodeController],
+      controllers: [GroupController],
     }).compile();
 
-    controller = module.get<UnicodeController>(UnicodeController);
+    controller = module.get<GroupController>(GroupController);
   });
 
   it('should be defined', () => {
