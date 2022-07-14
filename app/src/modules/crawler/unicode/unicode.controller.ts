@@ -1,4 +1,3 @@
-import { HttpService } from '@nestjs/axios';
 import { CACHE_MANAGER, Controller, Get, Inject, Param } from '@nestjs/common';
 import { map, Observable, of, zip } from 'rxjs';
 import { UnicodeService } from './unicode.service';
@@ -16,10 +15,7 @@ import { ray } from 'node-ray';
 
 @Controller('unicode-emoji')
 export class UnicodeController {
-  private puppeeterPage: any;
-
   constructor(
-    private readonly httpService: HttpService,
     private readonly unicodeService: UnicodeService,
     private readonly unicodeVersionService: UnicodeVersionService,
     private readonly emojiVersionService: EmojiVersionService,
