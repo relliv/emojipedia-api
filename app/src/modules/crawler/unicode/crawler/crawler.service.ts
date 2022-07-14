@@ -1,31 +1,31 @@
-import { CacheContainer } from 'node-ts-cache';
-import { NodeFsStorage } from 'node-ts-cache-storage-node-fs';
 import { HttpService } from '@nestjs/axios';
-import { Injectable } from '@nestjs/common';
+import { CACHE_MANAGER, Inject, Injectable } from '@nestjs/common';
 import { HTMLElement, parse } from 'node-html-parser';
-import { catchError, map, Observable, of, zip } from 'rxjs';
+import { Cache } from 'cache-manager';
+import { catchError, map, Observable, of } from 'rxjs';
 import { Prisma, Unicode_Emoji, Unicode_Emoji_Version } from '@prisma/client';
 import puppeteer from 'puppeteer';
-import { ray } from 'node-ray';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const keyword_extractor = require('keyword-extractor');
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import _, { map as Map } from 'underscore';
 
-import keyword_extractor from 'keyword-extractor';
+import { ray } from 'node-ray';
 
 @Injectable()
 export class CrawlerService {
-  private cacheContainer: CacheContainer;
   private puppeeterPage: any;
   private cacheTtl = 60 * 60 * 100;
 
-  constructor(private readonly httpService: HttpService) {
-    this.cacheContainer = new CacheContainer(
-      new NodeFsStorage('/storage/cache/'),
-    );
-  }
+  constructor(
+    private readonly httpService: HttpService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
 
   public async crawlEmojiVersions(): Promise<Observable<any>> {
     return new Promise(async (resolve) => {
       const cacheKey = 'unicode:emoji:versions',
-        cachedData = await this.cacheContainer.getItem(cacheKey);
+        cachedData = await this.cacheManager.get(cacheKey);
 
       if (cachedData) {
         console.log(`-> emoji versions, loaed from cache`);
@@ -59,9 +59,7 @@ export class CrawlerService {
                 .filter((x) => x.tag);
 
               if (results) {
-                this.cacheContainer.setItem(cacheKey, results, {
-                  ttl: this.cacheTtl,
-                });
+                this.cacheManager.set(cacheKey, results);
               }
 
               resolve(of(results ? results : []));
@@ -84,7 +82,7 @@ export class CrawlerService {
   public async crawlUnicodeVersions(): Promise<Observable<any>> {
     return new Promise(async (resolve) => {
       const cacheKey = 'unicode:versions',
-        cachedData = await this.cacheContainer.getItem(cacheKey);
+        cachedData = await this.cacheManager.get(cacheKey);
 
       if (cachedData) {
         console.log(`-> unicode versions, loaed from cache`);
@@ -118,9 +116,7 @@ export class CrawlerService {
                 .filter((x) => x.tag);
 
               if (results) {
-                this.cacheContainer.setItem(cacheKey, results, {
-                  ttl: this.cacheTtl,
-                });
+                this.cacheManager.set(cacheKey, results);
               }
 
               resolve(of(results ? results : []));
@@ -146,7 +142,7 @@ export class CrawlerService {
   ): Promise<Observable<any>> {
     return new Promise(async (resolve) => {
       const cacheKey = `unicode:emoji:type-${type}:v-${version.tag}`,
-        cachedData = await this.cacheContainer.getItem(cacheKey);
+        cachedData = await this.cacheManager.get(cacheKey);
 
       if (cachedData) {
         console.log(`-> ${type} ${version.tag} emojis, loaed from cache`);
@@ -177,7 +173,7 @@ export class CrawlerService {
               const results = unicodeEmojiItems
                 .map((element: HTMLElement) => {
                   if (element.attributes && element.attributes.href) {
-                    const emojiData = element.innerText.split(' '),
+                    const emojiData = element.textContent.split(' '),
                       emoji = emojiData[0]?.trim();
 
                     let item: any = null;
@@ -191,7 +187,8 @@ export class CrawlerService {
                       if (isEmojiValid) {
                         item = {
                           emoji: emoji,
-                          name: emojiData[1]?.trim(),
+                          name:
+                            element.textContent.split(/(?<=^\S+)\s/)[1] || '',
                           testedChromiumVersion: chromiumVersion,
                           slug: element.attributes.href.replace(/\//g, ''),
                         };
@@ -207,11 +204,13 @@ export class CrawlerService {
                 results[i].isSupportingByChromium = await this.isEmojiSupported(
                   results[i].emoji,
                 );
+
+                if (!results[i].isSupportingByChromium) {
+                  // ray(results[i]);
+                }
               }
 
-              this.cacheContainer.setItem(cacheKey, results, {
-                ttl: this.cacheTtl,
-              });
+              this.cacheManager.set(cacheKey, results);
 
               resolve(of(results ? results : []));
             }
@@ -235,7 +234,7 @@ export class CrawlerService {
   ): Promise<Observable<any>> {
     return new Promise(async (resolve) => {
       const cacheKey = `unicode:emoji:details:${emoji.slug}`,
-        cachedData = await this.cacheContainer.getItem(cacheKey);
+        cachedData = await this.cacheManager.get(cacheKey);
 
       if (cachedData) {
         console.log(`-> emoji ${emoji.emoji}, loaed from cache`);
@@ -253,18 +252,43 @@ export class CrawlerService {
               shortCodes = parsedHtml.querySelectorAll(
                 '.content article ul.shortcodes li',
               ),
-              description = parsedHtml.querySelectorAll(
+              descriptionData = parsedHtml.querySelectorAll(
                 'div.content>article>section.description>p',
+              ),
+              descriptionHtml = descriptionData
+                .map((x) => x.innerHTML)
+                .join(''),
+              descriptionText = _.unescape(
+                descriptionData.map((x) => x.textContent).join(''),
               );
+
+            const extractionResult = keyword_extractor.extract(
+                emoji.name + ' ' + descriptionText,
+                {
+                  language: 'english',
+                  remove_digits: false,
+                  return_changed_case: true,
+                  remove_duplicates: false,
+                },
+              ),
+              keywords = extractionResult
+                ?.filter(
+                  (x: any, pos: any, self: string | any[]) =>
+                    x && self.indexOf(x) == pos,
+                )
+                ?.join(',');
 
             const finalResult: any = {
               hasZeroWidthSpace: false,
               isLayered: false,
               slug: emoji.slug,
-              description: description
-                ? description.map((x) => x.innerHTML).join('')
-                : '',
+              description: descriptionHtml || '',
+              keywords: _.unescape(keywords),
             };
+
+            if (!Boolean(finalResult)) {
+              ray(descriptionHtml);
+            }
 
             // code points
             if (codepoints && codepoints.length > 0) {
@@ -314,9 +338,7 @@ export class CrawlerService {
               finalResult.shortCode = shortCodeResults;
             }
 
-            this.cacheContainer.setItem(cacheKey, finalResult, {
-              ttl: this.cacheTtl,
-            });
+            this.cacheManager.set(cacheKey, finalResult);
 
             resolve(of(finalResult ? finalResult : {}));
           }),
@@ -346,19 +368,18 @@ export class CrawlerService {
     return await this.puppeeterPage.evaluate((emoji: any) => {
       return new Promise((resolve, reject) => {
         try {
-          const cache = new Map();
+          // const cache = new Map();
 
           function isEmojiSupported(unicode) {
-            if (cache.has(unicode)) {
-              return cache.get(unicode);
-            }
+            // if (cache.has(unicode)) {
+            //   return cache.get(unicode);
+            // }
 
             const supported = isSupported(unicode);
 
-            cache.set(unicode, supported);
+            // cache.set(unicode, supported);
 
-            resolve(supported);
-            // return supported;
+            return supported;
           }
 
           const isSupported = (function () {
@@ -435,12 +456,15 @@ export class CrawlerService {
             };
           })();
 
+          resolve(isEmojiSupported(emoji));
           return isEmojiSupported(emoji);
         } catch (error) {
           reject(error);
+
+          console.error(error);
         }
       }).catch((error) => {
-        console.error(error); // add catch here
+        console.error(error);
       });
     }, emoji);
   }

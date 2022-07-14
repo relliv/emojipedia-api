@@ -28,17 +28,17 @@
     "@prisma/client": "^4.0.0",
     "cache-manager": "^4.1.0",
     "cache-manager-fs": "^1.0.9",
+    "cache-manager-fs-hash": "^1.0.0",
     "is-emoji-supported": "0.0.5",
     "keyword-extractor": "0.0.23",
     "node-html-parser": "^5.3.3",
     "node-ray": "^1.18.0",
-    "node-ts-cache": "^4.4.0",
-    "node-ts-cache-storage-node-fs": "^4.4.0",
     "puppeteer": "^15.3.2",
     "puppeteer-core": "^15.3.2",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
-    "rxjs": "^7.2.0"
+    "rxjs": "^7.2.0",
+    "underscore": "^1.13.4"
   },
   "devDependencies": {
     "@nestjs/cli": "^8.0.0",
