@@ -204,10 +204,6 @@ export class CrawlerService {
                 results[i].isSupportingByChromium = await this.isEmojiSupported(
                   results[i].emoji,
                 );
-
-                if (!results[i].isSupportingByChromium) {
-                  // ray(results[i]);
-                }
               }
 
               this.cacheManager.set(cacheKey, results);
@@ -258,25 +254,29 @@ export class CrawlerService {
               descriptionHtml = descriptionData
                 .map((x) => x.innerHTML)
                 .join(''),
-              descriptionText = _.unescape(
+              descriptionText: string = _.unescape(
                 descriptionData.map((x) => x.textContent).join(''),
-              );
-
-            const extractionResult = keyword_extractor.extract(
-                emoji.name + ' ' + descriptionText,
+              ),
+              // allow only word and word groups, years
+              keywordRegex =
+                /^(?![a-zA-Z0-9-]{3,}ed)(?!emoji|emojis|unicode|display|platforms|general|part|meaning)([a-zA-Z0-9'-]{3,})|[0-9]{4}$/g,
+              keywordExtractionResult = keyword_extractor.extract(
+                `${emoji.name} ${descriptionText}`.replace('-', ''),
                 {
                   language: 'english',
                   remove_digits: false,
-                  return_changed_case: true,
-                  remove_duplicates: false,
+                  return_changed_case: false,
+                  remove_duplicates: true,
                 },
-              ),
-              keywords = extractionResult
-                ?.filter(
-                  (x: any, pos: any, self: string | any[]) =>
-                    x && self.indexOf(x) == pos,
-                )
-                ?.join(',');
+              );
+
+            const keywords = keywordExtractionResult
+              ?.map((x: string) => x.toLowerCase())
+              ?.filter(
+                (x: string, pos: any, self: string | any[]) =>
+                  keywordRegex.test(x) && self.indexOf(x) == pos,
+              )
+              ?.join(',');
 
             const finalResult: any = {
               hasZeroWidthSpace: false,
@@ -371,13 +371,7 @@ export class CrawlerService {
           // const cache = new Map();
 
           function isEmojiSupported(unicode) {
-            // if (cache.has(unicode)) {
-            //   return cache.get(unicode);
-            // }
-
             const supported = isSupported(unicode);
-
-            // cache.set(unicode, supported);
 
             return supported;
           }
